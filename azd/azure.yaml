@@ -1,0 +1,6 @@
+name: vm-multi-deploy
+infra:
+  provider: bicep
+  path: ./infra
+  parameters:
+    vmName: ${VM_NAME}
