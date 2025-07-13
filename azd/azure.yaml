@@ -4,3 +4,6 @@ infra:
   path: ./infra
   parameters:
     vmName: ${VM_NAME}
+    adminPassword: ${ADMIN_PASSWORD}
+    bastionPassword: ${BASTION_PASSWORD}
+    sshPublicKey: ${SSH_PUBLIC_KEY}

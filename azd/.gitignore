@@ -1,0 +1,15 @@
+# Generated ARM templates
+*.json
+
+# SSH keys
+*.pem
+*.pub
+id_rsa*
+openinfradays*
+
+# Azure CLI cache
+.azure/
+
+# Environment specific files
+.env.local
+.env.*.local
