@@ -18,17 +18,13 @@
    ```bash
    az group create --name rg-openinfradays-krc-01 --location koreacentral
    ```
-3. SSH 키 생성 (선택사항, SSH 키 인증 사용시)
+3. (선택사항) SSH 키 생성 및 설정
    ```bash
-   ssh-keygen -t rsa -b 4096 -f ~/.ssh/openinfradays -C "openinfradays@example.com"
+   ./setup-ssh.sh
    ```
-4. 환경 변수(.env) 설정 예시
-   ```env
-   ADMIN_PASSWORD=패스워드
-   BASTION_PASSWORD=bastion_패스워드
-   VMNAME=openinfradays
-   AZURE_RESOURCE_GROUP=rg-openinfradays-krc-01
-   SSH_PUBLIC_KEY=ssh-rsa AAAAB3... # SSH 키 사용시 공개키 내용
+4. 배포 전 검증
+   ```bash
+   ./validate-deployment.sh
    ```
 5. azd 프로젝트 초기화 (최초 1회)
    ```bash
@@ -70,6 +66,19 @@
 - 배포: `azd up`
 - 삭제: `azd down`
 - 상태 확인: `azd show`
+
+## 헬퍼 스크립트
+- **setup-ssh.sh**: SSH 키 생성 및 .env 파일 자동 설정
+- **validate-deployment.sh**: 배포 전 설정 검증
+
+## 환경 변수(.env) 설정
+```env
+ADMIN_PASSWORD=패스워드
+BASTION_PASSWORD=bastion_패스워드
+VM_NAME=openinfradays
+AZURE_RESOURCE_GROUP=rg-openinfradays-krc-01
+SSH_PUBLIC_KEY=ssh-rsa AAAAB3... # SSH 키 사용시 공개키 내용 (선택사항)
+```
 
 </details>
 
