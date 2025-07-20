@@ -59,7 +59,9 @@
 ## 옵션/파라미터
 - **VM_NAME**: VM 이름 패턴 접두어 (예: openinfradays)
 - **ADMIN_PASSWORD**: Ubuntu VM의 관리자 비밀번호 (SSH 키 미사용시)
+  - 6-72자, 대문자/소문자/숫자/특수문자 중 최소 3가지 조합 필요
 - **BASTION_PASSWORD**: Bastion VM의 관리자 비밀번호 (SSH 키 미사용시)
+  - 6-72자, 대문자/소문자/숫자/특수문자 중 최소 3가지 조합 필요
 - **SSH_PUBLIC_KEY**: SSH 공개키 (설정시 SSH 키 인증 사용, 비어있으면 패스워드 인증)
 
 ## 주요 azd 명령어
@@ -73,12 +75,16 @@
 
 ## 환경 변수(.env) 설정
 ```env
-ADMIN_PASSWORD=패스워드
-BASTION_PASSWORD=bastion_패스워드
+ADMIN_PASSWORD=OpenInfraDays2025!        # Azure 복잡도 요구사항 충족 필요
+BASTION_PASSWORD=OpenInfraDays2025!      # Azure 복잡도 요구사항 충족 필요
 VM_NAME=openinfradays
 AZURE_RESOURCE_GROUP=rg-openinfradays-krc-01
 SSH_PUBLIC_KEY=ssh-rsa AAAAB3... # SSH 키 사용시 공개키 내용 (선택사항)
 ```
+
+> **패스워드 복잡도 요구사항**
+> - 6-72자 길이
+> - 대문자, 소문자, 숫자, 특수문자 중 최소 3가지 조합 필수
 
 </details>
 
