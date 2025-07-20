@@ -224,6 +224,9 @@ resource vms 'Microsoft.Compute/virtualMachines@2022-08-01' = [for (name, i) in 
 resource bastionVm 'Microsoft.Compute/virtualMachines@2022-08-01' = {
   name: bastionVmName
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_B1s'
@@ -266,11 +269,26 @@ resource bastionVm 'Microsoft.Compute/virtualMachines@2022-08-01' = {
   }
 }
 
+// Role assignment for bastion VM to run commands on worker VMs
+resource bastionVmContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(resourceGroup().id, bastionVm.id, 'Virtual Machine Contributor')
+  scope: resourceGroup()
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '9980e02c-c2be-4d73-94e8-173b1dc7cf3c') // Virtual Machine Contributor
+    principalId: bastionVm.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // 사용자 정의 스크립트 확장으로 SSH 설정과 alias 구성
 resource bastionVmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-08-01' = {
   parent: bastionVm
   name: 'CustomScriptForLinux'
   location: location
+  dependsOn: [
+    bastionVmContributorRole
+    vms // Ensure worker VMs are created first
+  ]
   properties: {
     publisher: 'Microsoft.Azure.Extensions'
     type: 'CustomScript'
@@ -278,46 +296,63 @@ resource bastionVmExtension 'Microsoft.Compute/virtualMachines/extensions@2022-0
     autoUpgradeMinorVersion: true
     settings: {
       script: base64('''#!/bin/bash
+set -e
+
 # SSH config 설정
 mkdir -p /home/azureuser/.ssh
 chown azureuser:azureuser /home/azureuser/.ssh
 chmod 700 /home/azureuser/.ssh
+
+# Generate SSH key pair for bastion-to-worker communication
+echo "Generating SSH key pair for bastion-to-worker communication..."
+sudo -u azureuser ssh-keygen -t rsa -b 4096 -f /home/azureuser/.ssh/bastion_key -N "" -C "bastion-to-worker"
+
+# Set proper permissions
+chown azureuser:azureuser /home/azureuser/.ssh/bastion_key*
+chmod 600 /home/azureuser/.ssh/bastion_key
+chmod 644 /home/azureuser/.ssh/bastion_key.pub
 
 # SSH aliases 설정
 cat > /home/azureuser/.ssh/config << 'EOF'
 Host vm1
     HostName 10.0.0.4
     User azureuser
+    IdentityFile ~/.ssh/bastion_key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host vm2
     HostName 10.0.0.5
     User azureuser
+    IdentityFile ~/.ssh/bastion_key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host vm3
     HostName 10.0.0.6
     User azureuser
+    IdentityFile ~/.ssh/bastion_key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host vm4
     HostName 10.0.0.7
     User azureuser
+    IdentityFile ~/.ssh/bastion_key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host vm5
     HostName 10.0.0.8
     User azureuser
+    IdentityFile ~/.ssh/bastion_key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host vm6
     HostName 10.0.0.9
     User azureuser
+    IdentityFile ~/.ssh/bastion_key
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 EOF
@@ -336,6 +371,39 @@ alias vm4='ssh vm4'
 alias vm5='ssh vm5'
 alias vm6='ssh vm6'
 EOF
+
+# Copy public key to worker VMs via Azure CLI
+echo "Copying public key to worker VMs..."
+PUBLIC_KEY=$(cat /home/azureuser/.ssh/bastion_key.pub)
+
+# Install Azure CLI
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+# Wait a bit for role assignment to propagate
+sleep 30
+
+# Authenticate using managed identity (VM should have system-assigned identity)
+az login --identity
+
+# Get resource group name from metadata
+RESOURCE_GROUP=$(curl -s -H Metadata:true "http://169.254.169.254/metadata/instance/compute/resourceGroupName?api-version=2021-01-01&format=text")
+
+# Get VM name prefix from metadata
+VM_NAME_PREFIX=$(curl -s -H Metadata:true "http://169.254.169.254/metadata/instance/compute/name?api-version=2021-01-01&format=text" | sed 's/-bastion$//')
+
+# Copy public key to all worker VMs using run command
+for i in {1..6}; do
+    VM_NAME="${VM_NAME_PREFIX}${i}"
+    echo "Adding public key to $VM_NAME..."
+    az vm run-command invoke \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$VM_NAME" \
+        --command-id RunShellScript \
+        --scripts "echo '$PUBLIC_KEY' >> /home/azureuser/.ssh/authorized_keys && chmod 600 /home/azureuser/.ssh/authorized_keys && chown azureuser:azureuser /home/azureuser/.ssh/authorized_keys" \
+        --no-wait || echo "Failed to add key to $VM_NAME, continuing..."
+done
+
+echo "SSH key setup completed"
 ''')
     }
   }

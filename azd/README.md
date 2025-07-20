@@ -46,6 +46,11 @@
    ```bash
    ssh azureuser@<bastion-public-ip>
    ```
+   또는 SSH 키 사용시:
+   ```bash
+   ssh -i ~/.ssh/openinfradays azureuser@<bastion-public-ip>
+   ```
+
 2. Bastion에서 내부 VM들에 접속 (alias 사용)
    ```bash
    vm1  # openinfradays1 VM 접속
@@ -55,6 +60,17 @@
    vm5  # openinfradays5 VM 접속
    vm6  # openinfradays6 VM 접속
    ```
+
+3. SSH 연결 테스트 (배포 후 bastion VM에서 실행)
+   ```bash
+   ./test-ssh-connectivity.sh
+   ```
+
+## SSH 키 인증 동작 방식
+- **외부 → Bastion**: 사용자의 SSH 키 (`~/.ssh/openinfradays`) 사용
+- **Bastion → Worker VMs**: Bastion에서 자동 생성된 SSH 키 (`~/.ssh/bastion_key`) 사용
+- 배포 중 Bastion VM이 자동으로 SSH 키를 생성하고 모든 Worker VM에 공개키를 배포
+- SSH config에 각 VM별 IdentityFile이 설정되어 있어 별도 키 지정 불필요
 
 ## 옵션/파라미터
 - **VM_NAME**: VM 이름 패턴 접두어 (예: openinfradays)
@@ -74,6 +90,7 @@
 ## 헬퍼 스크립트
 - **setup-ssh.sh**: SSH 키 생성 및 .env 파일 자동 설정
 - **validate-deployment.sh**: 배포 전 설정 검증
+- **test-ssh-connectivity.sh**: SSH 연결 테스트 (배포 후 bastion VM에서 실행)
 
 ## 환경 변수(.env) 설정
 ```env

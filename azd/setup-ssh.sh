@@ -37,13 +37,13 @@ if [ -f "$SSH_PUBLIC_KEY_PATH" ]; then
         # SSH_PUBLIC_KEY 라인이 있는지 확인하고 업데이트
         if grep -q "^SSH_PUBLIC_KEY=" "$ENV_FILE"; then
             # 기존 라인을 주석 처리하고 새로운 라인 추가
-            sed -i.bak "s|^SSH_PUBLIC_KEY=.*|SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY_CONTENT|" "$ENV_FILE"
+            sed -i.bak "s|^SSH_PUBLIC_KEY=.*|SSH_PUBLIC_KEY=\"$SSH_PUBLIC_KEY_CONTENT\"|" "$ENV_FILE"
         elif grep -q "^# SSH_PUBLIC_KEY=" "$ENV_FILE"; then
             # 주석 처리된 라인을 활성화하고 업데이트
-            sed -i.bak "s|^# SSH_PUBLIC_KEY=.*|SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY_CONTENT|" "$ENV_FILE"
+            sed -i.bak "s|^# SSH_PUBLIC_KEY=.*|SSH_PUBLIC_KEY=\"$SSH_PUBLIC_KEY_CONTENT\"|" "$ENV_FILE"
         else
             # 새로운 라인 추가
-            echo "SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY_CONTENT" >> "$ENV_FILE"
+            echo "SSH_PUBLIC_KEY=\"$SSH_PUBLIC_KEY_CONTENT\"" >> "$ENV_FILE"
         fi
         
         echo ".env 파일이 업데이트되었습니다."
