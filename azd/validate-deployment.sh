@@ -32,7 +32,7 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     source "$SCRIPT_DIR/.env"
     
     # 필수 변수 확인
-    REQUIRED_VARS=("VM_NAME" "ADMIN_PASSWORD" "BASTION_PASSWORD" "AZURE_RESOURCE_GROUP")
+    REQUIRED_VARS=("VM_NAME" "ADMIN_PASSWORD" "AZURE_RESOURCE_GROUP")
     
     for var in "${REQUIRED_VARS[@]}"; do
         if [ -n "${!var}" ]; then
@@ -42,6 +42,13 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
             exit 1
         fi
     done
+    
+    # BASTION_PASSWORD 선택사항 확인
+    if [ -n "$BASTION_PASSWORD" ]; then
+        echo "✓ BASTION_PASSWORD is set (will use specified password)"
+    else
+        echo "✓ BASTION_PASSWORD is not set (will prompt during deployment)"
+    fi
     
     # SSH 키 확인
     if [ -n "$SSH_PUBLIC_KEY" ]; then

@@ -5,7 +5,8 @@ param adminUsername string = 'azureuser'
 @secure()
 param adminPassword string
 @secure()
-param bastionPassword string
+@description('Bastion VM admin password - if empty and no SSH key provided, will prompt during deployment')
+param bastionPassword string = ''
 param vmCount int = 6
 @description('SSH public key for VM authentication')
 param sshPublicKey string = ''
@@ -230,7 +231,7 @@ resource bastionVm 'Microsoft.Compute/virtualMachines@2022-08-01' = {
     osProfile: {
       computerName: bastionVmName
       adminUsername: adminUsername
-      adminPassword: empty(sshPublicKey) ? bastionPassword : null
+      adminPassword: empty(sshPublicKey) ? (empty(bastionPassword) ? adminPassword : bastionPassword) : null
       linuxConfiguration: !empty(sshPublicKey) ? {
         disablePasswordAuthentication: true
         ssh: {

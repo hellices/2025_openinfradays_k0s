@@ -53,7 +53,8 @@ if [ -f "$SSH_PUBLIC_KEY_PATH" ]; then
     
     echo
     echo "=== 배포 준비 완료 ==="
-    echo "이제 'azd up' 명령으로 배포를 시작할 수 있습니다."
+    echo "SSH 키 인증이 설정되었습니다. 'azd up' 명령으로 배포를 시작할 수 있습니다."
+    echo "SSH 키를 사용하므로 패스워드 프롬프트는 나타나지 않습니다."
     echo
     echo "배포 후 Bastion VM에 접속하려면:"
     echo "ssh -i $SSH_KEY_PATH azureuser@<bastion-public-ip>"
