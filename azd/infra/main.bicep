@@ -181,7 +181,7 @@ resource vms 'Microsoft.Compute/virtualMachines@2022-08-01' = [for (name, i) in 
   location: location
   properties: {
     hardwareProfile: {
-      vmSize: 'Standard_B1s'
+      vmSize: 'Standard_D2s_v3'
     }
     osProfile: {
       computerName: name
@@ -271,7 +271,7 @@ resource bastionVm 'Microsoft.Compute/virtualMachines@2022-08-01' = {
 
 // Role assignment for bastion VM to run commands on worker VMs
 resource bastionVmContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, bastionVm.id, 'Virtual Machine Contributor')
+  name: guid(resourceGroup().id, bastionVm.id, 'Virtual Machine Contributor', vmName, bastionVmName)
   scope: resourceGroup()
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '9980e02c-c2be-4d73-94e8-173b1dc7cf3c') // Virtual Machine Contributor

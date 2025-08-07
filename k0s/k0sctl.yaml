@@ -1,0 +1,67 @@
+apiVersion: k0sctl.k0sproject.io/v1beta1
+kind: Cluster
+metadata:
+  name: k0s-cluster
+spec:
+  hosts:
+  # Controller 노드 3대
+  - ssh:
+      address: 10.0.0.7
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
+    role: controller
+    hostname: controller-1
+    installFlags:
+    - "--enable-metrics-scraper"
+    - "--enable-worker"  
+  - ssh:
+      address: 10.0.0.6
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
+    role: controller
+    hostname: controller-2
+  - ssh:
+      address: 10.0.0.8
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
+    role: controller
+    hostname: controller-3
+  # Worker 노드 1대
+  - ssh:
+      address: 10.0.0.4
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
+    role: worker
+    hostname: worker-1
+  ## worker 노드 2대 추가
+  # - ssh:
+  #     address: 10.0.0.5
+  #     user: azureuser
+  #     keyPath: ~/.ssh/bastion_key
+  #   role: worker
+  #   hostname: worker-2
+  # - ssh:
+  #     address: 10.0.0.9
+  #     user: azureuser
+  #     keyPath: ~/.ssh/bastion_key
+  #   role: worker
+  #   hostname: worker-3
+  k0s:
+    version: v1.31.10+k0s.0
+    # version: v1.33.3+k0s.0
+    config:
+      apiVersion: k0s.k0s.io/v1beta1
+      kind: ClusterConfig
+      metadata:
+        name: k0s
+      spec:
+        network:
+          serviceCIDR: "10.96.0.0/12"
+          podCIDR: "10.244.0.0/16"
+        controllerManager:
+          extraArgs:
+            bind-address: "0.0.0.0"
+        scheduler:
+          extraArgs:
+            bind-address: "0.0.0.0"
+            
