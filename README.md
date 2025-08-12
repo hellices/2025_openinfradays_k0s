@@ -10,17 +10,18 @@ k0s를 활용하여 Kubernetes를 설치하고 운영하는 방법을 실습을 
 
 ### 인프라 환경
 - VM 6대
-- 초기 구성: Controller 3대 + Worker 1대
+- 초기 구성: Controller 1대 + Worker 1대
 - 확장 구성: Controller 3대 + Worker 3대 (2대 추가)
 
 ### 실습 단계
 
 1. **[Step 1] k0s 클러스터 초기 설치 (v1.31)**
-   - Controller 노드 3대 설치
+   - Controller 노드 1대 설치
    - Worker 노드 1대 설치
    - k0sctl CLI 및 YAML 설정 활용
 
 2. **[Step 2] 클러스터 확장**
+   - Controller 노드 2대 추가 (총 3대)
    - Worker 노드 2대 추가 (총 3대)
    - 동적 노드 추가 방법 실습
 
@@ -240,7 +241,7 @@ metadata:
   name: k0s-cluster
 spec:
   hosts:
-  # Controller 노드 3대
+  # Controller 노드 1대
   - ssh:
       address: <controller-1-ip>
       user: azureuser
@@ -251,24 +252,6 @@ spec:
     # controller node metric scarpe를 위한 설정
     - "--enable-metrics-scraper"
     # controller node에 worker 역할도 추가하는 flag로 운영환경에서는 사용 하지 않도록 권고
-    - "--enable-worker"  
-  - ssh:
-      address: <controller-2-ip>
-      user: azureuser
-      keyPath: ~/.ssh/bastion_key
-    role: controller
-    hostname: controller-2
-    installFlags:
-    - "--enable-metrics-scraper"
-    - "--enable-worker"  
-  - ssh:
-      address: <controller-3-ip>
-      user: azureuser
-      keyPath: ~/.ssh/bastion_key
-    role: controller
-    hostname: controller-3
-    installFlags:
-    - "--enable-metrics-scraper"
     - "--enable-worker"  
   # Worker 노드 1대
   - ssh:
@@ -364,25 +347,45 @@ kubectl get nodes
 > ```
 
 
-### 2. 클러스터 확장 (Worker 노드 추가)
+### 2. 클러스터 확장 (노드 추가)
 
-k0sctl.yaml 파일에 Worker 노드 2대 추가:
-
+k0sctl.yaml 파일에 Controller, Worker 노드 2대씩 추가(/k0s/ksctl.yaml 주석 참고)
 ```yaml
-  # 기존 구성에 추가
+...
+  # Controller 노드 2대 추가
   - ssh:
-      address: <worker-2-ip>
+      address: 10.0.0.6
       user: azureuser
-  keyPath: ~/.ssh/bastion_key
+      keyPath: ~/.ssh/bastion_key
+    role: controller
+    hostname: controller-2
+    installFlags:
+    - "--enable-metrics-scraper"
+  - ssh:
+      address: 10.0.0.8
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
+    role: controller
+    hostname: controller-3
+    installFlags:
+    - "--enable-metrics-scraper"
+...
+  # worker 노드 2대 추가
+  - ssh:
+      address: 10.0.0.5
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
     role: worker
     hostname: worker-2
   - ssh:
-      address: <worker-3-ip>
+      address: 10.0.0.9
       user: azureuser
-  keyPath: ~/.ssh/bastion_key
+      keyPath: ~/.ssh/bastion_key
     role: worker
     hostname: worker-3
 ```
+
+
 
 ```bash
 # 클러스터 업데이트
@@ -496,6 +499,27 @@ Grafana에서 다음 메트릭들을 확인할 수 있습니다:
 1. Prometheus UI: `kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090`
 2. Targets 페이지에서 k0s-pushgateway 엔드포인트 상태 확인
 3. `k0s_*` 메트릭 쿼리로 시스템 컴포넌트 상태 확인
+
+#### Step 6: k0s 삭제
+```bash
+k0sctl reset --config k0sctl.yaml
+
+# 또는 각 vm에 접속해서 k0s service를 중지&제거합니다.
+sudo k0s stop
+sudo k0s reset
+```
+
+#### Step 7: k0s 추가 활용
+[**auto update**](https://docs.k0sproject.io/stable/autopilot/)
+[**runtime 교체**](https://docs.k0sproject.io/stable/runtime/)
+[**cni plugin**](https://docs.k0sproject.io/stable/networking/)
+- k0s는 기본으로 Kube-router / Calico 를 지원합니다.
+- cloud provider(azure cni 등)를 활용하려면 [다음](https://docs.k0sproject.io/stable/cloud-providers/)을 참고합니다.
+[**csi plugin**](https://docs.k0sproject.io/stable/storage/)
+- storage를 사용하기 위해서는 csi driver를 설치합니다.
+**ingress**
+- [nginx](https://docs.k0sproject.io/stable/examples/nginx-ingress/)
+- [traefik](https://docs.k0sproject.io/stable/examples/traefik-ingress/)
 
 ## 📚 참고 자료
 

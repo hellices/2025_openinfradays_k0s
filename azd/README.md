@@ -66,6 +66,10 @@
    ```bash
    ./test-ssh-connectivity.sh
    ```
+4. k0sctl, kubectl
+   ```bash
+   # 설치 스크립트에 포함되어 있어 별도 설치를 진행하지 않아도 됩니다. 
+   ```
 
 ## SSH 키 인증 동작 방식
 - **외부 → Bastion**: 사용자의 SSH 키 (`~/.ssh/openinfradays`) 사용

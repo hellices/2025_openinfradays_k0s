@@ -4,7 +4,7 @@ metadata:
   name: k0s-cluster
 spec:
   hosts:
-  # Controller 노드 3대
+  # Controller 노드 1대
   - ssh:
       address: 10.0.0.7
       user: azureuser
@@ -13,22 +13,23 @@ spec:
     hostname: controller-1
     installFlags:
     - "--enable-metrics-scraper"
-  - ssh:
-      address: 10.0.0.6
-      user: azureuser
-      keyPath: ~/.ssh/bastion_key
-    role: controller
-    hostname: controller-2
-    installFlags:
-    - "--enable-metrics-scraper"
-  - ssh:
-      address: 10.0.0.8
-      user: azureuser
-      keyPath: ~/.ssh/bastion_key
-    role: controller
-    hostname: controller-3
-    installFlags:
-    - "--enable-metrics-scraper"
+  # # Controller 노드 2대 추가
+  # - ssh:
+  #     address: 10.0.0.6
+  #     user: azureuser
+  #     keyPath: ~/.ssh/bastion_key
+  #   role: controller
+  #   hostname: controller-2
+  #   installFlags:
+  #   - "--enable-metrics-scraper"
+  # - ssh:
+  #     address: 10.0.0.8
+  #     user: azureuser
+  #     keyPath: ~/.ssh/bastion_key
+  #   role: controller
+  #   hostname: controller-3
+  #   installFlags:
+  #   - "--enable-metrics-scraper"
   # Worker 노드 1대
   - ssh:
       address: 10.0.0.4
@@ -96,7 +97,7 @@ spec:
             #   version: "v37.0.0"
             #   namespace: traefik-v2
             # Prometheus + Grafana (kube-prometheus-stack) for cluster monitoring
-            - name: prometheus-stack
-              chartname: prometheus-community/prometheus-stack
+            - name: kps
+              chartname: prometheus-community/kube-prometheus-stack
               version: "76.2.0"
               namespace: monitoring

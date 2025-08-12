@@ -229,7 +229,7 @@ resource bastionVm 'Microsoft.Compute/virtualMachines@2022-08-01' = {
   }
   properties: {
     hardwareProfile: {
-      vmSize: 'Standard_B1s'
+      vmSize: 'Standard_D2ads_v5'
     }
     osProfile: {
       computerName: bastionVmName
@@ -404,6 +404,17 @@ for i in {1..6}; do
 done
 
 echo "SSH key setup completed"
+
+echo "k0sctl, kubectl setup start"
+# k0sctl, kubectl install
+curl -sSL -o k0sctl https://github.com/k0sproject/k0sctl/releases/latest/download/k0sctl-linux-amd64
+chmod +x k0sctl
+sudo mv k0sctl /usr/local/bin/
+k0sctl version
+
+sudo snap install kubectl --classic
+
+echo "k0sctl, kubectl setup completed"
 ''')
     }
   }
