@@ -17,6 +17,6 @@ kubectl -n flux-system get ocirepositories,kustomizations
 ```
 
 Notes
-- OCIRepository points to ghcr.io/hellices/2025_openinfradays_k0s-manifests:latest
+- OCIRepository points to ghcr.io/hellices/2025_openinfradays_k0s:latest
 - Kustomization reconciles path ./app from the extracted OCI artifact
 - Workflow will republish the OCI artifact on every push, and Flux will reconcile when the OCI digest changes.

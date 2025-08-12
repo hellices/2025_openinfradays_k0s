@@ -22,7 +22,7 @@ curl http://localhost:8080/healthz
 ## FluxCD로 배포하는 방법 (요약)
 이 이미지는 본 레포지토리의 FluxCD 구성을 통해 배포되도록 준비되어 있습니다.
 워크플로는 앱 매니페스트(Deployment/Service/kustomization/namespace)를 이미지 digest(@sha256:…)로 고정하여
-OCI 아티팩트(ghcr.io/<owner>/<repo>-manifests:latest)로 GHCR에 푸시합니다. Flux는 이 아티팩트를 구독하고 digest 변경 시 자동으로 reconcile 합니다.
+OCI 아티팩트(ghcr.io/<owner>/<repo>:latest)로 GHCR에 푸시합니다. Flux는 이 아티팩트를 구독하고 digest 변경 시 자동으로 reconcile 합니다.
 
 1) 클러스터에 Flux 설치 및 부트스트랩 적용
 ```bash

@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: sampleapp
-          image: "ghcr.io/${{ github.repository }}:latest"
+          image: ghcr.io/hellices/2025_openinfradays_k0s:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

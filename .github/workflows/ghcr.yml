@@ -64,7 +64,7 @@ jobs:
           mkdir -p dist/manifests
           cp -r fluxcd/app dist/manifests/
           # Substitute image to pinned digest form
-          sed -i "s#ghcr.io/${{ github.repository }}:latest#ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}#g" dist/manifests/app/app.yaml
+          sed -i "s#ghcr.io/hellices/2025_openinfradays_k0s:latest#ghcr.io/hellices/2025_openinfradays_k0s@${{ steps.build.outputs.digest }}#g" dist/manifests/app/app.yaml
           # Pack as tar.gz for Flux OCI
           tar -czf dist/app.tgz -C dist/manifests .
 
@@ -78,7 +78,7 @@ jobs:
 
       - name: Push manifests as OCI artifact
         env:
-          DEST: ghcr.io/${{ github.repository }}-manifests:latest
+          DEST: ghcr.io/${{ github.repository }}:latest
         run: |
           oras push "$DEST" \
             --artifact-type application/vnd.cncf.flux.config.v1+tar+gzip \
