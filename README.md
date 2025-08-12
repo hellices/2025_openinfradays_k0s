@@ -431,6 +431,7 @@ sudo k0s start
 #### Step 2: k0s ServiceMonitor 생성 (선택)
 
 k0s 시스템 컴포넌트를 Prometheus가 수집할 수 있도록 ServiceMonitor를 생성합니다:
+prometheus를 설치할 때 이름을 기준으로 servicemonitor를 찾기 때문에 아래 라벨 필요
 
 ```bash
 # ServiceMonitor 생성
@@ -441,7 +442,7 @@ metadata:
   name: k0s-system-monitoring
   namespace: k0s-system
   labels:
-    app: k0s-observability
+    release: kps
 spec:
   endpoints:
   - port: http
@@ -486,15 +487,19 @@ kubectl port-forward --namespace monitoring svc/kube-prometheus-stack-grafana 30
 
 Grafana에서 다음 메트릭들을 확인할 수 있습니다:
 
-**모니터링되는 k0s 시스템 컴포넌트:**
+**[모니터링되는 k0s 시스템 컴포넌트](https://docs.k0sproject.io/stable/system-monitoring/):**
 - `kube-scheduler` - Kubernetes 스케줄러 메트릭
 - `kube-controller-manager` - 컨트롤러 매니저 메트릭  
 - `etcd` - etcd 데이터베이스 메트릭
 - `kine` - k0s의 경량 데이터 저장소 메트릭
 
-**대시보드 import**
-1. grafana
-2. node exporter
+> k0s는 kube-scheduler, kube-controller-manager 등을 controller에 설치해서 운영하기 때문에 prometheus에서 직접 스크래핑을 하는 것이 아니라 push-gateway를 통해서 수집합니다.
+> 설정은 설치 시 '''--enable-metrics-scraper'''로 기 적용
+> push gateway로 수집했기 때문에 기본 대시보드에는 보이지 않으나, 매트릭을 확인할 수 있습니다.
+
+
+**대시보드**
+prometheus-stack은 built-in grafana dashboard를 제공합니다.
 
 
 ### 5. FluxCD로 sampleapp 배포 (OCI 아티팩트 기반)
@@ -504,14 +509,12 @@ Grafana에서 다음 메트릭들을 확인할 수 있습니다:
 - 앱 매니페스트(Deployment/Service/kustomization/namespace)가 이미지 digest(@sha256:…)로 고정되어 번들(tar.gz)되고 GHCR에 OCI 아티팩트로 푸시 (ghcr.io/<owner>/<repo>-manifests:latest)
 - Flux의 OCIRepository가 latest 태그의 digest 변경을 감지하면 Kustomization이 ./app 경로를 reconcile하여 자동 적용
 
-사전 준비 (k0s 클러스터에서 1회):
+사전 준비 (Flux 설치):
 
 ```bash
 # Flux 설치 (CRDs 포함)
+curl -s https://fluxcd.io/install.sh | sudo bash
 flux install
-
-# flux-system 네임스페이스 없으면 생성
-kubectl create ns flux-system --dry-run=client -o yaml | kubectl apply -f -
 
 # 부트스트랩 리소스 적용 (OCIRepository/Kustomization)
 kubectl apply -f fluxcd/bootstrap/flux-bootstrap.yaml
@@ -519,17 +522,10 @@ kubectl apply -f fluxcd/bootstrap/flux-bootstrap.yaml
 # 상태 확인
 kubectl -n flux-system get ocirepositories.source.toolkit.fluxcd.io
 kubectl -n flux-system get kustomizations.kustomize.toolkit.fluxcd.io
+
+# 상태 확인은 vs code의 gitops extension(weave)으로도 확인 가능
 ```
 
-수동 테스트(선택):
-
-```bash
-# 로컬에서 kustomize로 렌더링 후 적용 (네임스페이스 및 앱 리소스)
-kubectl apply -k fluxcd/app
-
-# 리소스 확인
-kubectl -n app get deploy,svc
-```
 
 문제 해결:
 - GHCR가 프라이빗이면 Flux에서 레지스트리 인증(Secret + ServiceAccount) 구성이 필요합니다.

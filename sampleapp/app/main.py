@@ -51,15 +51,15 @@ def list_items():
     ]
 
 
-@app.post("/items", response_model=Item, status_code=201, summary="Create item")
-def create_item(payload: ItemCreate, response: Response):
-    global _next_id
-    now = datetime.utcnow()
-    item = Item(id=_next_id, name=payload.name, description=payload.description, created_at=now, updated_at=now)
-    _items[_next_id] = item
-    response.headers["Location"] = f"/items/{_next_id}"
-    _next_id += 1
-    return item
+# @app.post("/items", response_model=Item, status_code=201, summary="Create item")
+# def create_item(payload: ItemCreate, response: Response):
+#     global _next_id
+#     now = datetime.utcnow()
+#     item = Item(id=_next_id, name=payload.name, description=payload.description, created_at=now, updated_at=now)
+#     _items[_next_id] = item
+#     response.headers["Location"] = f"/items/{_next_id}"
+#     _next_id += 1
+#     return item
 
 
 @app.get("/items/{item_id}", response_model=Item, summary="Get item")

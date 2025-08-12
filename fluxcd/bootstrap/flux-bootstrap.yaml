@@ -7,7 +7,7 @@ spec:
   interval: 1m0s
   url: oci://ghcr.io/hellices/2025_openinfradays_k0s
   ref:
-  tag: latest
+    tag: latest
   layerSelector:
     mediaType: "application/vnd.cncf.flux.config.v1+tar+gzip"
 ---
