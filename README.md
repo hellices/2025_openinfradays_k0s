@@ -9,7 +9,7 @@ k0s를 활용하여 Kubernetes를 설치하고 운영하는 방법을 실습을 
 ## 📋 실습 구성
 
 ### 인프라 환경
-- Azure VM 6대 (기 구성된 환경 - `azd` 디렉토리 참고)
+- VM 6대
 - 초기 구성: Controller 3대 + Worker 1대
 - 확장 구성: Controller 3대 + Worker 3대 (2대 추가)
 
@@ -40,19 +40,92 @@ k0s를 활용하여 Kubernetes를 설치하고 운영하는 방법을 실습을 
 ## 🔧 사전 준비
 
 ### 필수 요구사항
-- Azure 계정 및 구독
-- Azure CLI 설치
-- Azure Developer CLI (azd) 설치
+- VM 6대(k0s 설치용)
 - SSH 클라이언트
 
-### 권장 환경
+### Bastion → 각 VM SSH 사전 구성 (중요)
+`k0sctl`은 Bastion에서 각 Controller/Worker VM로 **비대화식 SSH 접속**이 가능해야 동작합니다. 따라서 실습 시작 전에 Bastion VM에 SSH 키와 SSH config를 준비해 두어야 합니다.
+
+두 가지 시나리오 중 자신의 환경에 맞는 방법을 선택하세요.
+
+#### 1) azd 템플릿으로 VM을 배포한 경우 (자동 구성)
+- `azd up` 시 Bastion VM 내부에 `/home/azureuser/.ssh/bastion_key` (개인키) 가 자동 생성되고, 모든 대상 VM에 공개키가 배포됩니다.
+- `/home/azureuser/.ssh/config` 파일에 `vm1` ~ `vm6` Alias가 설정되어 있으므로 단순히 `ssh vm1` 형태로 접속 가능합니다.
+- 점검:
+  ```bash
+  ls -l ~/.ssh/bastion_key
+  grep -A3 vm1 ~/.ssh/config
+  ssh -o BatchMode=yes vm1 'echo ok'
+  ```
+
+#### 2) 수동/기존 인프라(VM 직접 생성) 환경 (수동 구성 필요)
+1. Bastion VM에 SSH 키 생성
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/bastion_key -C "k0s-bastion" -N ""
+   # 또는 RSA 필요 시: ssh-keygen -t rsa -b 4096 -f ~/.ssh/bastion_key -N ""
+   chmod 600 ~/.ssh/bastion_key
+   ```
+2. 공개키를 각 VM(Controller + Worker) 에 배포 (패스워드 로그인 1회 필요)
+   ```bash
+   # 예시 IP (환경에 맞게 수정)
+   for IP in 10.0.0.4 10.0.0.5 10.0.0.6 10.0.0.7 10.0.0.8 10.0.0.9; do \
+     ssh-copy-id -i ~/.ssh/bastion_key.pub azureuser@"$IP"; \
+   done
+   ```
+3. SSH config 작성 (Alias 제공)
+   ```bash
+   cat >> ~/.ssh/config <<'EOF'
+   Host vm1
+     HostName 10.0.0.4
+     User azureuser
+     IdentityFile ~/.ssh/bastion_key
+     StrictHostKeyChecking accept-new
+   Host vm2
+     HostName 10.0.0.5
+     User azureuser
+     IdentityFile ~/.ssh/bastion_key
+     StrictHostKeyChecking accept-new
+   Host vm3
+     HostName 10.0.0.6
+     User azureuser
+     IdentityFile ~/.ssh/bastion_key
+     StrictHostKeyChecking accept-new
+   Host vm4
+     HostName 10.0.0.7
+     User azureuser
+     IdentityFile ~/.ssh/bastion_key
+     StrictHostKeyChecking accept-new
+   Host vm5
+     HostName 10.0.0.8
+     User azureuser
+     IdentityFile ~/.ssh/bastion_key
+     StrictHostKeyChecking accept-new
+   Host vm6
+     HostName 10.0.0.9
+     User azureuser
+     IdentityFile ~/.ssh/bastion_key
+     StrictHostKeyChecking accept-new
+   EOF
+   chmod 600 ~/.ssh/config
+   ```
+4. 접속 테스트
+   ```bash
+   for H in vm1 vm2 vm3 vm4 vm5 vm6; do ssh -o BatchMode=yes "$H" 'echo OK from $(hostname)'; done
+   ```
+
+#### k0sctl.yaml 에서의 keyPath
+`k0sctl.yaml` 의 각 host 항목에 `keyPath: ~/.ssh/bastion_key` 로 지정되어 있어야 하며, 위 준비가 끝난 뒤에야 `k0sctl apply` 가 정상 동작합니다.
+
+> 만약 별도 키 이름/경로를 사용했다면 `k0sctl.yaml` 의 `keyPath` 를 동일하게 맞추세요.
+
+### Optional
 - VS Code + Azure Developer CLI Extension
-- Linux/macOS/WSL2 환경
+- Linux 환경(bastion VM)
 - VM spec: 2Core / 4Gb (minimum) 
 
 ## 🚀 시작하기
 
-### 사전 준비: Azure VM 인프라 구성
+### 사전 준비: VM 인프라 구성
 
 실습을 위해 다음과 같은 VM 환경이 구성되어야 합니다:
 
@@ -128,16 +201,37 @@ azd up
 ### 1. k0s 설치 및 설정
 
 #### k0sctl 설치
+가장 간단한 설치 (최신 릴리스 자동):
 
 ```bash
-wget https://github.com/k0sproject/k0sctl/releases/download/dev/k0sctl-linux-amd64
-chmod +x k0sctl-linux-amd64
-sudo mv k0sctl-linux-amd64 /usr/local/bin/k0sctl
+curl -sSL -o k0sctl https://github.com/k0sproject/k0sctl/releases/latest/download/k0sctl-linux-amd64
+chmod +x k0sctl
+sudo mv k0sctl /usr/local/bin/
+k0sctl version
 ```
+
+ARM (aarch64) 환경이거나 아키텍처 자동 감지를 원한다면:
+
+```bash
+ARCH=$(uname -m)
+case $ARCH in
+  x86_64|amd64) ARCH=amd64 ;;
+  aarch64|arm64) ARCH=arm64 ;;
+  armv7l|armv8l|arm) ARCH=armv7 ;;
+  *) echo "Unsupported arch: $ARCH" && exit 1 ;;
+esac
+curl -sSL -o k0sctl "https://github.com/k0sproject/k0sctl/releases/latest/download/k0sctl-linux-${ARCH}"
+chmod +x k0sctl && sudo mv k0sctl /usr/local/bin/
+k0sctl version
+```
+
+설치 후 `k0sctl version` 출력이 정상적으로 나오면 다음 단계로 진행합니다.
 
 #### 초기 클러스터 설정 (v1.31)
 
 1. **k0sctl.yaml 설정 파일 생성**
+
+참고: 레포지토리에 `k0s/k0sctl.yaml` 예제가 포함되어 있습니다. Bastion VM에서 실행할 것을 가정하며, azd 배포의 기본 IP 매핑은 `vm1=10.0.0.4` … `vm6=10.0.0.9` 입니다. Bastion에서 워커로 접속하는 키 경로는 `~/.ssh/bastion_key`입니다.
 
 ```yaml
 apiVersion: k0sctl.k0sproject.io/v1beta1
@@ -150,46 +244,92 @@ spec:
   - ssh:
       address: <controller-1-ip>
       user: azureuser
-      keyPath: ~/.ssh/id_rsa
+      keyPath: ~/.ssh/bastion_key
     role: controller
     hostname: controller-1
+    installFlags:
+    # controller node metric scarpe를 위한 설정
+    - "--enable-metrics-scraper"
+    # controller node에 worker 역할도 추가하는 flag로 운영환경에서는 사용 하지 않도록 권고
+    - "--enable-worker"  
   - ssh:
       address: <controller-2-ip>
       user: azureuser
-      keyPath: ~/.ssh/id_rsa
+      keyPath: ~/.ssh/bastion_key
     role: controller
     hostname: controller-2
+    installFlags:
+    - "--enable-metrics-scraper"
+    - "--enable-worker"  
   - ssh:
       address: <controller-3-ip>
       user: azureuser
-      keyPath: ~/.ssh/id_rsa
+      keyPath: ~/.ssh/bastion_key
     role: controller
     hostname: controller-3
+    installFlags:
+    - "--enable-metrics-scraper"
+    - "--enable-worker"  
   # Worker 노드 1대
   - ssh:
       address: <worker-1-ip>
       user: azureuser
-      keyPath: ~/.ssh/id_rsa
+      keyPath: ~/.ssh/bastion_key
     role: worker
     hostname: worker-1
   k0s:
-    version: v1.31.10+k0s.0
+    version: v1.33.2+k0s.0
     config:
       apiVersion: k0s.k0s.io/v1beta1
       kind: ClusterConfig
       metadata:
         name: k0s
       spec:
+        # konnectivity port 기본설정
+        konnectivity:
+          adminPort: 8133
+          agentPort: 8132
         network:
-          serviceCIDR: "10.96.0.0/12"
-          podCIDR: "10.244.0.0/16"
-        controllerManager:
-          extraArgs:
-            bind-address: "0.0.0.0"
-        scheduler:
-          extraArgs:
-            bind-address: "0.0.0.0"
+          provider: calico
+          calico:
+            envVars:              
+              CALICO_IPV4POOL_CIDR: "10.244.0.0/16"
+              CALICO_DISABLE_FILE_LOGGING: "true"
+              FELIX_DEFAULTENDPOINTTOHOSTACTION: "ACCEPT"
+              FELIX_LOGSEVERITYSCREEN: "info"
+              FELIX_HEALTHENABLED: "true"
+              FELIX_PROMETHEUSMETRICSENABLED: "true"
+              FELIX_FEATUREDETECTOVERRIDE: "ChecksumOffloadBroken=true"
+              FELIX_IPV6SUPPORT: "false"
+        # Persistently manage Traefik with k0s helm extensions to avoid uninstall on re-apply
+        extensions:
+          helm:
+            concurrencyLevel: 5
+            repositories:
+            - name: traefik
+              url: https://traefik.github.io/charts
+            - name: bitnami
+              url: https://charts.bitnami.com/bitnami
+            - name: stable
+              url: https://charts.helm.sh/stable
+            - name: prometheus-community
+              url: https://prometheus-community.github.io/helm-charts
+            - name: grafana
+              url: https://grafana.github.io/helm-charts
+            charts:
+            # ingress
+            - name: traefik
+              chartname: traefik/traefik
+              version: "v37.0.0"
+              namespace: traefik-v2
+            # Prometheus + Grafana (kube-prometheus-stack) for cluster monitoring
+            - name: prometheus-stack
+              chartname: prometheus-community/prometheus-stack
+              version: "76.2.0"
+              namespace: monitoring
 ```
+
+
 
 2. **클러스터 배포**
 
@@ -201,13 +341,28 @@ k0sctl apply --config k0sctl.yaml
 k0sctl kubeconfig --config k0sctl.yaml > kubeconfig
 
 # kubectl 설정
-
+sudo snap install kubectl --classic
 export KUBECONFIG=$(pwd)/kubeconfig
 kubectl get nodes
 ```
 
-> ### [Why doesn't kubectl get nodes list the k0s controllers?](https://docs.k0sproject.io/stable/troubleshooting/FAQ/#why-doesnt-kubectl-get-nodes-list-the-k0s-controllers)
+> #### [Why doesn't kubectl get nodes list the k0s controllers?](https://docs.k0sproject.io/stable/troubleshooting/FAQ/#why-doesnt-kubectl-get-nodes-list-the-k0s-controllers)
 > As a default, the control plane does not run kubelet at all, and will not accept any workloads, so the controller will not show up on the node list in kubectl. If you want your controller to accept workloads and run pods, you do so with: k0s controller --enable-worker (recommended only as test/dev/POC environments).
+
+> #### k0s에서의 helm chart 설치
+> k0s 는 kube-system 네임스페이스의 chart crd를 이용해서 설치 목록을 관리하고 있어 위에서 설치한 helm chart(trafik, prometheus)는 
+> helm list로 보이지 않습니다.
+> 목록을 확인하려면 아래와 같이 crd를 통해 확인이 가능합니다.
+> 
+> ```bash
+> $ kubectl -n kube-system get charts.helm.k0sproject.io
+> NAME                               AGE
+> k0s-addon-chart-prometheus-stack   168m
+> k0s-addon-chart-traefik            168m
+> 
+> $ kubectl -n kube-system describe chart k0s-addon-chart-prometheus-stack
+> ```
+
 
 ### 2. 클러스터 확장 (Worker 노드 추가)
 
@@ -218,13 +373,13 @@ k0sctl.yaml 파일에 Worker 노드 2대 추가:
   - ssh:
       address: <worker-2-ip>
       user: azureuser
-      keyPath: ~/.ssh/id_rsa
+  keyPath: ~/.ssh/bastion_key
     role: worker
     hostname: worker-2
   - ssh:
       address: <worker-3-ip>
       user: azureuser
-      keyPath: ~/.ssh/id_rsa
+  keyPath: ~/.ssh/bastion_key
     role: worker
     hostname: worker-3
 ```
@@ -240,9 +395,9 @@ kubectl get nodes
 ### 3. Kubernetes 버전 업그레이드 (v1.31 → v1.33)
 
 ```yaml
-# k0sctl.yaml에서 버전 변경
+# k0sctl.yaml에서 버전 변경 (예: v1.33.3)
 k0s:
-  version: v1.33.0+k0s.0
+  version: v1.33.3+k0s.0
 ```
 
 ```bash
@@ -253,53 +408,9 @@ k0sctl apply --config k0sctl.yaml
 kubectl get nodes -o wide
 ```
 
-### 4. Traefik Ingress Controller 설치
+### 4. [모니터링 시스템 구성](https://docs.k0sproject.io/stable/system-monitoring/)
 
-k0s extension을 사용하여 Traefik을 설치합니다:
-
-k0sctl.yaml 파일의 k0s 설정 부분에 extensions를 추가:
-
-```yaml
-  k0s:
-    config:
-      spec:
-        extensions:
-          helm:
-            repositories:
-            - name: traefik
-              url: https://traefik.github.io/charts
-            - name: bitnami
-              url: https://charts.bitnami.com/bitnami
-            charts:
-            - name: traefik
-              chartname: traefik/traefik
-              version: "20.5.3"
-              namespace: default
-            - name: metallb
-              chartname: bitnami/metallb
-              version: "2.5.4"
-              namespace: default
-              values: |
-                configInline:
-                  address-pools:
-                  - name: generic-cluster-pool
-                    protocol: layer2
-                    addresses:
-                    - 192.168.0.5-192.168.0.10
-```
-
-```bash
-# 설정 적용
-k0sctl apply --config k0sctl.yaml
-
-# Traefik 설치 확인
-kubectl get pods -n traefik
-kubectl get svc -n traefik
-```
-
-### 5. [모니터링 시스템 구성](https://docs.k0sproject.io/stable/system-monitoring/)
-
-#### Step 1: k0s 시스템 모니터링 활성화
+#### Step 1: k0s 시스템 모니터링 활성화(이미 완료, 만일 설정이 안 된 경우 아래와 같이 수행)
 
 k0s의 내장 시스템 컴포넌트 모니터링을 활성화합니다:
 
@@ -314,7 +425,7 @@ sudo k0s start
 ```
 
 
-#### Step 2: k0s ServiceMonitor 생성
+#### Step 2: k0s ServiceMonitor 생성 (선택)
 
 k0s 시스템 컴포넌트를 Prometheus가 수집할 수 있도록 ServiceMonitor를 생성합니다:
 
@@ -351,11 +462,12 @@ k0sctl apply --config k0sctl.yaml
 kubectl get all -n k0s-system
 kubectl get servicemonitor -n k0s-system
 
-# Prometheus 및 Grafana 설치 확인
-kubectl get all -n monitoring
+# (선택) kube-prometheus-stack를 extensions로 추가했다면, Prometheus 및 Grafana 상태 확인
+kubectl get pods -n monitoring
+kubectl get svc -n monitoring
 ```
 
-#### Step 4: Grafana 대시보드 접근
+#### Step 4: Grafana 대시보드 접근 (kube-prometheus-stack 사용 시)
 
 ```bash
 # Grafana 관리자 패스워드 확인

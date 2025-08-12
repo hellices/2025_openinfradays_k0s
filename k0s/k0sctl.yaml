@@ -13,19 +13,22 @@ spec:
     hostname: controller-1
     installFlags:
     - "--enable-metrics-scraper"
-    - "--enable-worker"  
   - ssh:
       address: 10.0.0.6
       user: azureuser
       keyPath: ~/.ssh/bastion_key
     role: controller
     hostname: controller-2
+    installFlags:
+    - "--enable-metrics-scraper"
   - ssh:
       address: 10.0.0.8
       user: azureuser
       keyPath: ~/.ssh/bastion_key
     role: controller
     hostname: controller-3
+    installFlags:
+    - "--enable-metrics-scraper"
   # Worker 노드 1대
   - ssh:
       address: 10.0.0.4
@@ -33,21 +36,21 @@ spec:
       keyPath: ~/.ssh/bastion_key
     role: worker
     hostname: worker-1
-  ## worker 노드 2대 추가
-  # - ssh:
-  #     address: 10.0.0.5
-  #     user: azureuser
-  #     keyPath: ~/.ssh/bastion_key
-  #   role: worker
-  #   hostname: worker-2
-  # - ssh:
-  #     address: 10.0.0.9
-  #     user: azureuser
-  #     keyPath: ~/.ssh/bastion_key
-  #   role: worker
-  #   hostname: worker-3
+  # worker 노드 2대 추가
+  - ssh:
+      address: 10.0.0.5
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
+    role: worker
+    hostname: worker-2
+  - ssh:
+      address: 10.0.0.9
+      user: azureuser
+      keyPath: ~/.ssh/bastion_key
+    role: worker
+    hostname: worker-3
   k0s:
-    version: v1.31.10+k0s.0
+    version: v1.33.2+k0s.0
     # version: v1.33.3+k0s.0
     config:
       apiVersion: k0s.k0s.io/v1beta1
@@ -55,13 +58,45 @@ spec:
       metadata:
         name: k0s
       spec:
+        # konnectivity port 기본설정
+        konnectivity:
+          adminPort: 8133
+          agentPort: 8132
         network:
-          serviceCIDR: "10.96.0.0/12"
-          podCIDR: "10.244.0.0/16"
-        controllerManager:
-          extraArgs:
-            bind-address: "0.0.0.0"
-        scheduler:
-          extraArgs:
-            bind-address: "0.0.0.0"
-            
+          provider: calico
+          calico:
+            envVars:              
+              CALICO_IPV4POOL_CIDR: "10.244.0.0/16"
+              CALICO_DISABLE_FILE_LOGGING: "true"
+              FELIX_DEFAULTENDPOINTTOHOSTACTION: "ACCEPT"
+              FELIX_LOGSEVERITYSCREEN: "info"
+              FELIX_HEALTHENABLED: "true"
+              FELIX_PROMETHEUSMETRICSENABLED: "true"
+              FELIX_FEATUREDETECTOVERRIDE: "ChecksumOffloadBroken=true"
+              FELIX_IPV6SUPPORT: "false"
+        # Persistently manage Traefik with k0s helm extensions to avoid uninstall on re-apply
+        extensions:
+          helm:
+            concurrencyLevel: 5
+            repositories:
+            # - name: traefik
+            #   url: https://traefik.github.io/charts
+            # - name: bitnami
+            #   url: https://charts.bitnami.com/bitnami
+            - name: stable
+              url: https://charts.helm.sh/stable
+            - name: prometheus-community
+              url: https://prometheus-community.github.io/helm-charts
+            - name: grafana
+              url: https://grafana.github.io/helm-charts
+            charts:
+            # traefik - ingress가 필요한 경우에만 활성화
+            # - name: traefik
+            #   chartname: traefik/traefik
+            #   version: "v37.0.0"
+            #   namespace: traefik-v2
+            # Prometheus + Grafana (kube-prometheus-stack) for cluster monitoring
+            - name: prometheus-stack
+              chartname: prometheus-community/prometheus-stack
+              version: "76.2.0"
+              namespace: monitoring
