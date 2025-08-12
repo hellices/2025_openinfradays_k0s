@@ -29,14 +29,14 @@ k0s를 활용하여 Kubernetes를 설치하고 운영하는 방법을 실습을 
    - v1.31 → v1.33 업그레이드
    - `updateconfig` 활용한 안전한 업그레이드
 
-4. **[Step 4] Traefik Ingress Controller 설치**
-   - 외부 트래픽 라우팅 설정
-   - 서비스 노출 및 도메인 매핑
-
-5. **[Step 5] 모니터링 시스템 구성**
+4. **[Step 4] 모니터링 시스템 구성**
    - Prometheus Operator 설치
    - Grafana 대시보드 구성
    - 시스템 컴포넌트 모니터링
+
+5. **[Step 5] FluxCD로 sampleapp 배포 (OCI 아티팩트 기반)**
+  - Docker 이미지와 매니페스트를 GHCR로 푸시
+  - Flux가 OCI digest 변경을 감지하고 자동 적용
 
 ## 🔧 사전 준비
 
@@ -458,9 +458,6 @@ EOF
 #### Step 3: 클러스터 업데이트 및 확인
 
 ```bash
-# 설정 적용
-k0sctl apply --config k0sctl.yaml
-
 # k0s pushgateway 확인
 kubectl get all -n k0s-system
 kubectl get servicemonitor -n k0s-system
@@ -495,12 +492,52 @@ Grafana에서 다음 메트릭들을 확인할 수 있습니다:
 - `etcd` - etcd 데이터베이스 메트릭
 - `kine` - k0s의 경량 데이터 저장소 메트릭
 
-**Prometheus에서 확인:**
-1. Prometheus UI: `kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090`
-2. Targets 페이지에서 k0s-pushgateway 엔드포인트 상태 확인
-3. `k0s_*` 메트릭 쿼리로 시스템 컴포넌트 상태 확인
+**대시보드 import**
+1. grafana
+2. node exporter
 
-#### Step 6: k0s 삭제
+
+### 5. FluxCD로 sampleapp 배포 (OCI 아티팩트 기반)
+
+다음이 자동으로 수행됩니다:
+- sampleapp Docker 이미지가 GHCR로 빌드/푸시 (ghcr.io/<owner>/<repo>)
+- 앱 매니페스트(Deployment/Service/kustomization/namespace)가 이미지 digest(@sha256:…)로 고정되어 번들(tar.gz)되고 GHCR에 OCI 아티팩트로 푸시 (ghcr.io/<owner>/<repo>-manifests:latest)
+- Flux의 OCIRepository가 latest 태그의 digest 변경을 감지하면 Kustomization이 ./app 경로를 reconcile하여 자동 적용
+
+사전 준비 (k0s 클러스터에서 1회):
+
+```bash
+# Flux 설치 (CRDs 포함)
+flux install
+
+# flux-system 네임스페이스 없으면 생성
+kubectl create ns flux-system --dry-run=client -o yaml | kubectl apply -f -
+
+# 부트스트랩 리소스 적용 (OCIRepository/Kustomization)
+kubectl apply -f fluxcd/bootstrap/flux-bootstrap.yaml
+
+# 상태 확인
+kubectl -n flux-system get ocirepositories.source.toolkit.fluxcd.io
+kubectl -n flux-system get kustomizations.kustomize.toolkit.fluxcd.io
+```
+
+수동 테스트(선택):
+
+```bash
+# 로컬에서 kustomize로 렌더링 후 적용 (네임스페이스 및 앱 리소스)
+kubectl apply -k fluxcd/app
+
+# 리소스 확인
+kubectl -n app get deploy,svc
+```
+
+문제 해결:
+- GHCR가 프라이빗이면 Flux에서 레지스트리 인증(Secret + ServiceAccount) 구성이 필요합니다.
+- 외부 노출이 필요하면 Service 타입을 LoadBalancer로 변경하거나 Ingress 리소스를 추가하세요.
+- GitHub Actions가 매니페스트 OCI 아티팩트를 갱신하면 Flux가 digest 변경을 감지해 자동으로 reconcile 합니다.
+
+
+### 6. k0s 삭제
 ```bash
 k0sctl reset --config k0sctl.yaml
 
@@ -509,17 +546,25 @@ sudo k0s stop
 sudo k0s reset
 ```
 
-#### Step 7: k0s 추가 활용
-[**auto update**](https://docs.k0sproject.io/stable/autopilot/)
-[**runtime 교체**](https://docs.k0sproject.io/stable/runtime/)
-[**cni plugin**](https://docs.k0sproject.io/stable/networking/)
-- k0s는 기본으로 Kube-router / Calico 를 지원합니다.
-- cloud provider(azure cni 등)를 활용하려면 [다음](https://docs.k0sproject.io/stable/cloud-providers/)을 참고합니다.
-[**csi plugin**](https://docs.k0sproject.io/stable/storage/)
-- storage를 사용하기 위해서는 csi driver를 설치합니다.
-**ingress**
-- [nginx](https://docs.k0sproject.io/stable/examples/nginx-ingress/)
-- [traefik](https://docs.k0sproject.io/stable/examples/traefik-ingress/)
+## k0s 추가 활용 팁   
+- [**auto update**](https://docs.k0sproject.io/stable/autopilot/)
+- [**runtime 교체**](https://docs.k0sproject.io/stable/runtime/)
+- [**cni plugin**](https://docs.k0sproject.io/stable/networking/)
+- - k0s는 기본으로 Kube-router / Calico 를 지원합니다.
+- - cloud provider(azure cni 등)를 활용하려면 [다음](https://docs.k0sproject.io/stable/cloud-providers/)을 참고합니다.
+- [**csi plugin**](https://docs.k0sproject.io/stable/storage/)
+- - storage를 사용하기 위해서는 csi driver를 설치합니다.
+- **ingress**
+- - [nginx](https://docs.k0sproject.io/stable/examples/nginx-ingress/)
+- - [traefik](https://docs.k0sproject.io/stable/examples/traefik-ingress/)
+
+## 🤝 기여하기
+
+이슈나 개선사항이 있으시면 언제든지 Pull Request를 보내주세요!
+
+## 📄 라이선스
+
+이 프로젝트는 Apache License 2.0 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
 
 ## 📚 참고 자료
 
@@ -533,14 +578,6 @@ sudo k0s reset
 
 ### Traefik
 - [Traefik 공식 문서](https://doc.traefik.io/traefik/)
-
-## 🤝 기여하기
-
-이슈나 개선사항이 있으시면 언제든지 Pull Request를 보내주세요!
-
-## 📄 라이선스
-
-이 프로젝트는 Apache License 2.0 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
 
 ---
 

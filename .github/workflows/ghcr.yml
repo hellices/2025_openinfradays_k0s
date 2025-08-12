@@ -6,6 +6,7 @@ on:
     paths:
       - 'sampleapp/**'
       - '.github/workflows/ghcr.yml'
+      - 'fluxcd/**'
   workflow_dispatch:
 
 permissions:
@@ -37,6 +38,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          labels: |
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/blob/main/sampleapp/README-GHCR.md
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -44,6 +47,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./sampleapp
@@ -54,3 +58,32 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Render manifests with digest
+        run: |
+          mkdir -p dist/manifests
+          cp -r fluxcd/app dist/manifests/
+          # Substitute image to pinned digest form
+          sed -i "s#ghcr.io/${{ github.repository }}:latest#ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}#g" dist/manifests/app/app.yaml
+          # Pack as tar.gz for Flux OCI
+          tar -czf dist/app.tgz -C dist/manifests .
+
+      - name: Install oras
+        run: |
+          curl -sL https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz | sudo tar -C /usr/local/bin -xz oras
+
+      - name: Login GHCR for oras
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push manifests as OCI artifact
+        env:
+          DEST: ghcr.io/${{ github.repository }}-manifests:latest
+        run: |
+          oras push "$DEST" \
+            --artifact-type application/vnd.cncf.flux.config.v1+tar+gzip \
+            --annotation "org.opencontainers.image.title=sampleapp-manifests" \
+            --annotation "org.opencontainers.image.description=Kubernetes manifests for sampleapp (Deployment/Service)" \
+            --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            dist/app.tgz:application/vnd.cncf.flux.config.v1+tar+gzip
+
